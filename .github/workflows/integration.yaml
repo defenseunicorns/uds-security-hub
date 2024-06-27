@@ -1,6 +1,7 @@
-name: E2E Tests
+name: Integration Tests
 
 on:
+  workflow_dispatch: # Allows manual trigger for all branches
   push:
     branches:
       - main
@@ -14,6 +15,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    # This condition ensures that steps within the job only run on non-fork PRs or other events
 
     steps:
     - name: Harden Runner
@@ -43,7 +46,7 @@ jobs:
         GHCR_CREDS: ${{ secrets.GHCR_CREDS }}
         REGISTRY1_CREDS: ${{ secrets.REGISTRY1_CREDS }}
         DOCKER_IO_CREDS: ${{ secrets.DOCKER_IO_CREDS }}
-      run: make test
+      run: make test-integration
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673 # v4.5.0

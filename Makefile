@@ -29,6 +29,9 @@ table-init: docker-up
 docker-down:
 	docker compose -f docker-compose.yml down || true
 
+test:
+	go test ./... -v -coverprofile=coverage.out
+
 test-integration: table-init
 	@if [ -z "$${GITHUB_TOKEN}" ] || [ -z "$${GHCR_CREDS}" ] || [ -z "$${REGISTRY1_CREDS}" ]; then \
 		echo "Error: GITHUB_TOKEN, GHCR_CREDS, or REGISTRY1_CREDS is not set"; \
