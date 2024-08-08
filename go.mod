@@ -8,7 +8,7 @@ require (
 	github.com/anchore/syft v1.10.0
 	github.com/docker/docker v27.1.1+incompatible
 	github.com/google/go-cmp v0.6.0
-	github.com/google/go-containerregistry v0.20.1
+	github.com/google/go-containerregistry v0.20.2
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/klauspost/compress v1.17.9
 	github.com/prometheus/client_golang v1.18.0
