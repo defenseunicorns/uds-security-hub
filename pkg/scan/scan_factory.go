@@ -15,7 +15,6 @@ func (sf *ScannerFactoryImpl) CreateScanner(
 	ctx context.Context,
 	logger types.Logger,
 	org, packageName, tag, packagePath, offlineDBPath string,
-	registryCredentials []types.RegistryCredentials,
 	scannerType ScannerType,
 ) (types.PackageScanner, error) {
 	if packagePath != "" {
@@ -33,7 +32,6 @@ func (sf *ScannerFactoryImpl) CreateScanner(
 		packageName,
 		tag,
 		offlineDBPath,
-		registryCredentials,
 		scannerType,
 	), nil
 }

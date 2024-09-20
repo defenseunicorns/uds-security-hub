@@ -10,10 +10,10 @@ GIT_TAG := $(shell git describe --tags --abbrev=0)
 
 # Build the project
 build:
-	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/pkg/version.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/pkg/version.Version=$(GIT_TAG)'" -o bin/uds-security-hub main.go
-	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/pkg/version.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/pkg/version.Version=$(GIT_TAG)'" -o bin/table-init ./cmd/table-init/main.go
-	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/pkg/version.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/pkg/version.Version=$(GIT_TAG)'" -o bin/store ./cmd/store/main.go
-	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/pkg/version.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/pkg/version.Version=$(GIT_TAG)'" -o bin/scan ./cmd/scan.go
+	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/cmd.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/cmd.Version=$(GIT_TAG)'" -o bin/uds-security-hub main.go
+	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/cmd.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/cmd.Version=$(GIT_TAG)'" -o bin/table-init ./cmd/table-init/main.go
+	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/cmd.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/cmd.Version=$(GIT_TAG)'" -o bin/store ./cmd/store/main.go
+	go build -ldflags "-X 'github.com/defenseunicorns/uds-security-hub/cmd.CommitSHA=$(GIT_COMMIT)' -X 'github.com/defenseunicorns/uds-security-hub/cmd.Version=$(GIT_TAG)'" -o bin/scan ./cmd/scan.go
 
 # Lint the code
 lint:
@@ -25,10 +25,10 @@ clean:
 
 test: test-unit test-integration
 
-test-unit: 
+test-unit:
 	go test -timeout 160s ./... -v -coverprofile=coverage.out
 
-test-integration: 
+test-integration:
 	@if [ -z "$${GITHUB_TOKEN}" ] || [ -z "$${GHCR_CREDS}" ]; then \
 		echo "Error: GITHUB_TOKEN or GHCR_CREDS is not set"; \
 		exit 1; \

@@ -9,14 +9,11 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/content"
-	"oras.land/oras-go/v2/content/oci"
-	"oras.land/oras-go/v2/registry"
-	"oras.land/oras-go/v2/registry/remote"
-	"oras.land/oras-go/v2/registry/remote/auth"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/defenseunicorns/uds-security-hub/internal/executor"
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
@@ -24,15 +21,14 @@ import (
 
 // Scanner implements the PackageScanner interface for remote packages.
 type Scanner struct {
-	logger              types.Logger
-	ctx                 context.Context
-	commandExecutor     types.CommandExecutor
-	org                 string
-	packageName         string
-	tag                 string
-	offlineDBPath       string
-	scannerType         ScannerType
-	registryCredentials []types.RegistryCredentials
+	logger          types.Logger
+	ctx             context.Context
+	commandExecutor types.CommandExecutor
+	org             string
+	packageName     string
+	tag             string
+	offlineDBPath   string
+	scannerType     ScannerType
 }
 
 // NewRemotePackageScanner creates a new Scanner for remote packages.
@@ -43,18 +39,16 @@ func NewRemotePackageScanner(
 	packageName,
 	tag,
 	offlineDBPath string, // New parameter for offline DB path
-	registryCredentials []types.RegistryCredentials,
 	scannerType ScannerType,
 ) types.PackageScanner {
 	return &Scanner{
-		logger:              logger,
-		commandExecutor:     executor.NewCommandExecutor(ctx),
-		registryCredentials: registryCredentials,
-		org:                 org,
-		packageName:         packageName,
-		tag:                 tag,
-		offlineDBPath:       offlineDBPath,
-		scannerType:         scannerType,
+		logger:          logger,
+		commandExecutor: executor.NewCommandExecutor(ctx),
+		org:             org,
+		packageName:     packageName,
+		tag:             tag,
+		offlineDBPath:   offlineDBPath,
+		scannerType:     scannerType,
 	}
 }
 
@@ -144,57 +138,29 @@ func (s *Scanner) scanImageAndProcessResults(
 	imageRef string,
 	commandExecutor types.CommandExecutor,
 ) ([]types.PackageScannerResult, error) {
-	ref, err := registry.ParseReference(imageRef)
+	ref, err := name.ParseReference(imageRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse reference: %w", err)
 	}
 
-	repo, err := remote.NewRepository(fmt.Sprintf("%s/%s", ref.Registry, ref.Repository))
+	platform, _ := v1.ParsePlatform("multi/amd64")
+
+	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithPlatform(*platform))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to remote repository: %w", err)
+		panic(err)
 	}
 
 	tmpDir, err := os.MkdirTemp("", "uds-remote-oci-root-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tmp dir: %w", err)
 	}
+
+	fmt.Println("tmp directory: ", tmpDir)
 	defer os.RemoveAll(tmpDir)
 
-	ociRootDir := path.Join(tmpDir, "oci")
-	err = os.MkdirAll(ociRootDir, 0o700)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create oci root dir: %w", err)
-	}
+	crane.SaveOCI(img, tmpDir)
 
-	ociRoot, err := oci.New(ociRootDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create oci store: %w", err)
-	}
-
-	repo.Client = &auth.Client{
-		Credential: func(ctx context.Context, hostport string) (auth.Credential, error) {
-			for _, cred := range s.registryCredentials {
-				if cred.RegistryURL == hostport {
-					return auth.Credential{
-						Username: cred.Username,
-						Password: cred.Password,
-					}, nil
-				}
-			}
-
-			return auth.EmptyCredential, fmt.Errorf("registry %s not supported", hostport)
-		},
-	}
-
-	desiredPlatform := "amd64"
-	_, err = oras.Copy(ctx, repo, ref.Reference, ociRoot, "", oras.CopyOptions{
-		MapRoot: restrictOrasCopyToPlatform(desiredPlatform),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy remote repository: %w", err)
-	}
-
-	zarfOverrides, err := scanForZarfLayers(ociRootDir, desiredPlatform)
+	zarfOverrides, err := scanForZarfLayers(tmpDir, platform.Architecture)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local oci image directory: %w", err)
 	}
@@ -210,7 +176,7 @@ func (s *Scanner) scanImageAndProcessResults(
 	case RootFSScannerType:
 		rootfsScannables, err := s.processRootfsScannables(
 			tmpDir,
-			ociRootDir,
+			tmpDir,
 			zarfOverrides.indexJSONFilename,
 		)
 		if err != nil {
@@ -268,34 +234,6 @@ func (s *Scanner) processRootfsScannables(
 type zarfOverrides struct {
 	indexJSONFilename string
 	sbomFilename      string
-}
-
-func restrictOrasCopyToPlatform(desiredPlatform string) func(
-	ctx context.Context, src content.ReadOnlyStorage, root ocispec.Descriptor,
-) (ocispec.Descriptor, error) {
-	return func(
-		ctx context.Context, src content.ReadOnlyStorage, root ocispec.Descriptor,
-	) (ocispec.Descriptor, error) {
-		rc, err := src.Fetch(ctx, root)
-		if err != nil {
-			return ocispec.DescriptorEmptyJSON, fmt.Errorf("failed to fetch root: %w", err)
-		}
-		defer rc.Close()
-
-		var idx ocispec.Index
-		err = json.NewDecoder(rc).Decode(&idx)
-		if err != nil {
-			return ocispec.DescriptorEmptyJSON, fmt.Errorf("failed to decode json: %w", err)
-		}
-
-		for _, manifest := range idx.Manifests {
-			if manifest.Platform != nil && manifest.Platform.Architecture == "amd64" {
-				return manifest, nil
-			}
-		}
-
-		return ocispec.DescriptorEmptyJSON, fmt.Errorf("did not find platform %s", desiredPlatform)
-	}
 }
 
 // scanForZarfLayers takes in a local oci directory and finds the images/index.json and

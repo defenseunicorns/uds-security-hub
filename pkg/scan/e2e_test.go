@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/defenseunicorns/uds-security-hub/internal/docker"
 	"github.com/defenseunicorns/uds-security-hub/internal/log"
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
@@ -34,14 +33,13 @@ func TestE2EScanFunctionality(t *testing.T) {
 			if ghcrCreds == "" {
 				t.Fatalf("GHCR_CREDS must be set")
 			}
-			registryCreds := docker.ParseCredentials([]string{ghcrCreds})
 			// Define the test inputs
 
 			org := "defenseunicorns"
 			packageName := "packages/uds/sonarqube"
 			tag := "9.9.5-uds.1-upstream"
 			// Create the scanner
-			scanner := NewRemotePackageScanner(ctx, logger, org, packageName, tag, "", registryCreds, tt.scannerType)
+			scanner := NewRemotePackageScanner(ctx, logger, org, packageName, tag, "", tt.scannerType)
 			// Perform the scan
 			results, err := scanner.Scan(ctx)
 			if err != nil {

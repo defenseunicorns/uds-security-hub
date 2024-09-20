@@ -21,7 +21,7 @@ func TestCreateScanner_LocalPackage(t *testing.T) {
 	logger := log.NewLogger(context.Background())
 	packagePath := "/path/to/package"
 
-	scanner, err := sf.CreateScanner(context.Background(), logger, "", "", "", packagePath, "", nil, RootFSScannerType)
+	scanner, err := sf.CreateScanner(context.Background(), logger, "", "", "", packagePath, "", RootFSScannerType)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -36,7 +36,7 @@ func TestCreateScanner_RemotePackage(t *testing.T) {
 	packageName := "examplePackage"
 	tag := "latest"
 
-	scanner, err := sf.CreateScanner(context.Background(), nil, org, packageName, tag, "", "", nil, RootFSScannerType)
+	scanner, err := sf.CreateScanner(context.Background(), nil, org, packageName, tag, "", "", RootFSScannerType)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCreateScanner_RemotePackage(t *testing.T) {
 func TestCreateScanner_MissingParameters(t *testing.T) {
 	sf := &ScannerFactoryImpl{}
 
-	_, err := sf.CreateScanner(context.Background(), nil, "", "", "", "", "", nil, RootFSScannerType)
+	_, err := sf.CreateScanner(context.Background(), nil, "", "", "", "", "", RootFSScannerType)
 	expectedErr := "org, packageName, and tag are required for remote scanning"
 	if diff := cmp.Diff(expectedErr, err.Error()); diff != "" {
 		t.Errorf("unexpected error (-want +got):\n%s", diff)

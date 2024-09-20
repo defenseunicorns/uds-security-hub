@@ -2,18 +2,14 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
-	"github.com/zeebo/assert"
 
 	"github.com/defenseunicorns/uds-security-hub/internal/data/model"
 	"github.com/defenseunicorns/uds-security-hub/internal/external"
-	"github.com/defenseunicorns/uds-security-hub/internal/github"
 	"github.com/defenseunicorns/uds-security-hub/internal/log"
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
@@ -172,74 +168,6 @@ func Test_runStoreScannerWithDeps(t *testing.T) {
 			err = runStoreScannerWithDeps(context.Background(), tt.cmd, log.NewLogger(context.Background()), tt.scanner, tt.manager, c)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("runStoreScannerWithDeps() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestGetPackageVersions(t *testing.T) {
-	tests := []struct {
-		name          string
-		org           string
-		packageName   string
-		gitHubToken   string
-		mockFunc      func(ctx context.Context, client types.HTTPClientInterface, token, org, packageType, packageName string) ([]github.VersionTagDate, error)
-		expectedError bool
-		expectedTag   string
-		expectedDate  time.Time
-	}{
-		{
-			name:        "successful retrieval",
-			org:         "defenseunicorns",
-			packageName: "test-package",
-			gitHubToken: "test-token",
-			mockFunc: func(ctx context.Context, client types.HTTPClientInterface, token, org, packageType, packageName string) ([]github.VersionTagDate, error) {
-				return []github.VersionTagDate{
-					{Tags: []string{"v1.0.0"}, Date: time.Date(2023, time.January, 1, 0, 0, 0, 0, time.UTC)},
-				}, nil
-			},
-			expectedError: false,
-			expectedTag:   "v1.0.0",
-			expectedDate:  time.Date(2023, time.January, 1, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:        "error from GitHub API",
-			org:         "defenseunicorns",
-			packageName: "test-package",
-			gitHubToken: "test-token",
-			mockFunc: func(ctx context.Context, client types.HTTPClientInterface, token, org, packageType, packageName string) ([]github.VersionTagDate, error) {
-				return nil, fmt.Errorf("API error")
-			},
-			expectedError: true,
-		},
-		{
-			name:        "empty parameters",
-			org:         "",
-			packageName: "",
-			gitHubToken: "",
-			mockFunc: func(ctx context.Context, client types.HTTPClientInterface, token, org, packageType, packageName string) ([]github.VersionTagDate, error) {
-				return nil, fmt.Errorf("invalid parameters")
-			},
-			expectedError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Override the getVersionTagDate function with the mock function
-			getVersionTagDate = tt.mockFunc
-
-			// Call the function under test
-			version, err := getVersionTagDate(context.Background(), nil, tt.gitHubToken, tt.org, "container", tt.packageName)
-
-			// Check for expected error
-			if tt.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, version)
-				assert.Equal(t, tt.expectedTag, version[0].Tags[0])
-				assert.Equal(t, tt.expectedDate, version[0].Date)
 			}
 		})
 	}
