@@ -36,7 +36,9 @@ func main() {
 	ctx := context.Background()
 	config := getConfig()
 
-	if err := run(ctx, &config, sql.CreateDBConnector, migrateDatabase); err != nil {
+	if err := run(ctx, &config, func(dbPath string) sql.DBConnector {
+		return sql.CreateDBConnector(dbPath)
+	}, migrateDatabase); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
@@ -44,17 +46,10 @@ func main() {
 func run(
 	ctx context.Context,
 	config *Config,
-	connectorFactory func(string, string, string, string, string, string) sql.DBConnector,
+	connectorFactory func(string) sql.DBConnector,
 	migrator func(*gorm.DB) error,
 ) error {
-	connector := connectorFactory(
-		config.Host,
-		config.Port,
-		config.User,
-		config.Password,
-		config.DBName,
-		config.InstanceConnectionName,
-	)
+	connector := connectorFactory(config.DBPath)
 	db, err := connector.Connect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
@@ -68,21 +63,13 @@ func run(
 }
 
 type Config struct {
-	Host                   string
-	Port                   string
-	User                   string
-	Password               string
-	DBName                 string
-	InstanceConnectionName string
+	DBType string
+	DBPath string
 }
 
 func getConfig() Config {
 	return Config{
-		Host:                   getEnv("DB_HOST", "localhost"),
-		Port:                   getEnv("DB_PORT", "5432"),
-		User:                   getEnv("DB_USER", "test_user"),
-		Password:               getEnv("DB_PASSWORD", "test_password"),
-		DBName:                 getEnv("DB_NAME", "test_db"),
-		InstanceConnectionName: os.Getenv("INSTANCE_CONNECTION_NAME"),
+		DBType: getEnv("DB_TYPE", "sqlite"),
+		DBPath: getEnv("DB_PATH", "test.db"),
 	}
 }

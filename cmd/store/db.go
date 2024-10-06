@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/defenseunicorns/uds-security-hub/internal/data/model"
-	"github.com/defenseunicorns/uds-security-hub/internal/sql"
 )
 
 type DatabaseInitializer interface {
@@ -20,7 +18,7 @@ type DatabaseInitializer interface {
 type defaultDatabaseInitializer struct{}
 
 func (d *defaultDatabaseInitializer) Initialize(config *DatabaseConfig) (*gorm.DB, error) {
-	initializer := getInitializer(config)
+	initializer := getInitializer()
 
 	dbConn, err := initializer.Initialize(config)
 	if err != nil {
@@ -45,26 +43,8 @@ func (s *sqliteDatabaseInitializer) Initialize(config *DatabaseConfig) (*gorm.DB
 	return dbConn, nil
 }
 
-type postgresDatabaseInitializer struct{}
-
-func (p *postgresDatabaseInitializer) Initialize(config *DatabaseConfig) (*gorm.DB, error) {
-	connector := sql.CreateDBConnector(
-		config.DBType, config.DBPath, config.DBInstanceConnectionName,
-		config.DBUser, config.DBPassword, config.DBName,
-	)
-	dbConn, err := connector.Connect(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-	return dbConn, nil
-}
-
-func getInitializer(config *DatabaseConfig) DatabaseInitializer {
-	if config.DBType == "sqlite" {
-		return &sqliteDatabaseInitializer{}
-	}
-
-	return &postgresDatabaseInitializer{}
+func getInitializer() DatabaseInitializer {
+	return &sqliteDatabaseInitializer{}
 }
 
 type DatabaseMigrator interface {

@@ -1,7 +1,0 @@
-packages/uds/leapfrogai/whisper
-packages/uds/leapfrogai/vllm
-packages/uds/leapfrogai/leapfrogai-api
-packages/uds/leapfrogai/llama-cpp-python
-packages/uds/leapfrogai/text-embeddings
-packages/uds/leapfrogai/leapfrogai-ui
-packages/uds/leapfrogai/supabase
