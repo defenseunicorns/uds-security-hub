@@ -1,8 +1,10 @@
 package semver
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetNMinusTwoSemvers(t *testing.T) {
@@ -11,18 +13,11 @@ func TestGetNMinusTwoSemvers(t *testing.T) {
 
 	expected := []string{"1.0.0", "1.1.0"}
 	result, err := GetNMinusTwoSemvers(versions, n)
-	if err != nil {
-		t.Fatalf("Error: %v", err)
-	}
-
-	if len(result) != len(expected) {
-		t.Fatalf("Expected %d versions, got %d", len(expected), len(result))
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(expected), len(result), "expected and result slice lengths do not match")
 
 	for i, v := range result {
-		if v != expected[i] {
-			t.Errorf("Expected version %s, got %s", expected[i], v)
-		}
+		assert.Equal(t, expected[i], v, "version mismatch at index %d", i)
 	}
 }
 
@@ -33,18 +28,11 @@ func TestGetNMinusCustomExcludeSemvers(t *testing.T) {
 
 	expected := []string{"1.0.0"}
 	result, err := GetNMinusTwoSemvers(versions, n, exclude) // Corrected function call
-	if err != nil {
-		t.Fatalf("Error: %v", err)
-	}
-
-	if len(result) != len(expected) {
-		t.Fatalf("Expected %d versions, got %d", len(expected), len(result))
-	}
+	require.NoError(t, err)
+	require.Equal(t, len(expected), len(result), "expected and result slice lengths do not match")
 
 	for i, v := range result {
-		if v != expected[i] {
-			t.Errorf("Expected version %s, got %s", expected[i], v)
-		}
+		assert.Equal(t, expected[i], v, "version mismatch at index %d", i)
 	}
 }
 
@@ -53,13 +41,8 @@ func TestGetNMinusTwoSemversInvalidN(t *testing.T) {
 	n := 1 // n is less than excludeCount (which defaults to 2)
 
 	_, err := GetNMinusTwoSemvers(versions, n)
-	if err == nil {
-		t.Fatal("Expected an error but got none")
-	}
-
-	if !errors.Is(err, ErrInvalidN) {
-		t.Fatalf("Expected error %v, got %v", ErrInvalidN, err)
-	}
+	require.Error(t, err, "expected an error but got none")
+	require.ErrorIs(t, err, ErrInvalidN, "expected error %v, got %v", ErrInvalidN, err)
 }
 
 func TestGetNMinusTwoSemversNotEnoughVersions(t *testing.T) {
@@ -67,13 +50,8 @@ func TestGetNMinusTwoSemversNotEnoughVersions(t *testing.T) {
 	n := 3 // More versions requested than available
 
 	_, err := GetNMinusTwoSemvers(versions, n)
-	if err == nil {
-		t.Fatal("Expected an error but got none")
-	}
-
-	if !errors.Is(err, ErrNotEnoughVersions) {
-		t.Fatalf("Expected error %v, got %v", ErrNotEnoughVersions, err)
-	}
+	require.Error(t, err, "expected an error but got none")
+	require.ErrorIs(t, err, ErrNotEnoughVersions, "expected error %v, got %v", ErrNotEnoughVersions, err)
 }
 
 func TestGetNMinusTwoSemversInvalidVersion(t *testing.T) {
@@ -81,11 +59,6 @@ func TestGetNMinusTwoSemversInvalidVersion(t *testing.T) {
 	n := 3
 
 	_, err := GetNMinusTwoSemvers(versions, n)
-	if err == nil {
-		t.Fatal("Expected an error but got none")
-	}
-
-	if !errors.Is(err, ErrInvalidSemver) {
-		t.Fatalf("Expected error %v, got %v", ErrInvalidSemver, err)
-	}
+	require.Error(t, err, "expected an error but got none")
+	require.ErrorIs(t, err, ErrInvalidSemver, "expected error %v, got %v", ErrInvalidSemver, err)
 }
