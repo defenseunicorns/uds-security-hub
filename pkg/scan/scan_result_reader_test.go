@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
@@ -140,19 +140,13 @@ func TestWriteToJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			err := WriteToJSON(&buf, tt.input) // Call method on reader
-			if err != nil {
-				t.Fatalf("failed to WriteToJSON: %v", err)
-			}
+			require.NoError(t, err, "failed to WriteToJSON")
 
 			var output []JSONOutputEntry
 			err = json.Unmarshal(buf.Bytes(), &output)
-			if err != nil {
-				t.Fatalf("failed to Unmarshal output: %v", err)
-			}
+			require.NoError(t, err, "failed to Unmarshal output")
 
-			if diff := cmp.Diff(output, tt.expected); diff != "" {
-				t.Errorf("WriteToJSON() mismatch (-got +want):\n%s", diff)
-			}
+			require.Equal(t, tt.expected, output, "WriteToJSON() mismatch (-got +want):\n%s")
 		})
 	}
 }
@@ -292,18 +286,14 @@ func TestWriteToCSV(t *testing.T) {
 
 			var buf bytes.Buffer
 			err := WriteToCSV(&buf, allResults)
-			if err != nil {
-				t.Errorf("error occurred while writing to csv: %v", err)
-			}
+			require.NoError(t, err, "error occurred while writing to cvs")
+
 			got := buf.String()
 			r := csv.NewReader(strings.NewReader(got))
 			records, err := r.ReadAll()
-			if err != nil {
-				t.Fatalf("Failed to parse CSV: %v", err)
-			}
-			if diff := cmp.Diff(records, tt.want); diff != "" {
-				t.Errorf("WriteToCSV() mismatch (-got +want):\n%s", diff)
-			}
+			require.NoError(t, err, "failed to parse csv")
+
+			require.Equal(t, tt.want, records, "WriteToCSV() mismatch (-got +want):\n%s")
 		})
 	}
 }
@@ -316,9 +306,8 @@ func (f *failedWriter) Write([]byte) (int, error) {
 
 func TestWriteToCSVError(t *testing.T) {
 	err := WriteToCSV(&failedWriter{}, []types.ScanResultReader{})
-	if err == nil {
-		t.Fatal("expected an err writing to a bad writer")
-	}
+	require.Error(t, err)
+	require.ErrorContains(t, err, "failed to write csv")
 }
 
 type jsonFailWriter struct{}
@@ -347,7 +336,20 @@ func TestWriteToJSONWriteError(t *testing.T) {
 	}
 
 	err := WriteToJSON(writer, testResults)
-	if err == nil || !strings.Contains(err.Error(), "error writing JSON data") {
-		t.Fatalf("expected error writing JSON data, got %v", err)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "error writing JSON data")
+}
+
+func TestGetVulnerabilities_EmptyResults(t *testing.T) {
+	r := &scanResultReader{
+		scanResult: types.ScanResult{
+			ArtifactName: "test-artifact",
+			Results: []struct {
+				Vulnerabilities []types.VulnerabilityInfo `json:"Vulnerabilities"`
+			}{},
+		},
 	}
+
+	got := r.GetVulnerabilities()
+	require.Empty(t, got, "expected empty vulnerabilities, but got %v", got)
 }
