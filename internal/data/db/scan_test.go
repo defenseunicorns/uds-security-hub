@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,32 @@ import (
 	"github.com/defenseunicorns/uds-security-hub/internal/data/model"
 	"github.com/defenseunicorns/uds-security-hub/internal/external"
 )
+
+func TestNewGormScanManager(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	tests := []struct {
+		name    string
+		db      *gorm.DB
+		logger  *slog.Logger
+		wantErr bool
+	}{
+		{
+			name:    "valid db",
+			db:      setupDB(t),
+			logger:  logger,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewGormScanManager(tt.db, tt.logger)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NewGormScanManager() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 // Convert external.ScanDTO to Scan.
 func convertDTOToScan(dto *external.ScanDTO) model.Scan {
@@ -77,7 +104,6 @@ func TestInsertScan(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create scan manager: %v", err)
 			}
-
 			// Insert a package first
 			packageModel := model.Package{
 				Name:       "test-package-TestInsertScan",
@@ -294,7 +320,6 @@ func TestGetScan(t *testing.T) {
 			if err := manager.InsertScan(context.Background(), &dto); err != nil {
 				t.Fatalf("failed to insert scan: %v", err)
 			}
-
 			// Fetch the inserted scan to get its ID
 			var insertedScan model.Scan
 			if err := tt.args.db.Preload("Vulnerabilities").First(&insertedScan, "artifact_name = ?", dto.ArtifactName).Error; err != nil {
@@ -487,4 +512,88 @@ func setupSQLiteDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to migrate database: %v", err)
 	}
 	return db
+}
+
+func TestInsertReport(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	type args struct {
+		db     *gorm.DB
+		ctx    context.Context
+		report *model.Report
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		errMsg  error
+	}{
+		{
+			name: "successful insertion",
+			args: args{
+				db:  setupSQLiteDB(t),
+				ctx: context.Background(),
+				report: &model.Report{
+					CreatedAt:   time.Now(),
+					PackageName: "test-package",
+					Tag:         "v1.2.3",
+					SBOM:        json.RawMessage(`{"type": "jsonb"}`),
+					ID:          1337,
+					Critical:    0,
+					High:        1,
+					Medium:      2,
+					Low:         3,
+					Info:        4,
+					Total:       10,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "error inserting report",
+			args: args{
+				db: func() *gorm.DB {
+					db := setupSQLiteDB(t)
+					sqlDB, err := db.DB() // prematurely close db to simulate error
+					if err != nil {
+						t.Fatalf("failed to get database object: %v", err)
+					}
+					sqlDB.Close()
+					return db
+				}(),
+				ctx:    context.Background(),
+				report: &model.Report{PackageName: "test-package"},
+			},
+			wantErr: true,
+			errMsg:  errInsertReport,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager, err := NewGormScanManager(tt.args.db, logger)
+			if err != nil {
+				t.Fatalf("failed to create scan manager: %v", err)
+			}
+			err = manager.InsertReport(tt.args.ctx, tt.args.report)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InsertReport() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr && err != nil && tt.errMsg != nil {
+				if !strings.Contains(err.Error(), tt.errMsg.Error()) {
+					t.Errorf("expected error message %q, got %v", tt.errMsg, err)
+				}
+			}
+
+			if tt.args.report != nil && !tt.wantErr {
+				var fetchedReport model.Report
+				if err := tt.args.db.First(&fetchedReport, "id = ?", tt.args.report.ID).Error; err != nil {
+					t.Fatalf("failed to fetch report: %v", err)
+				}
+				if diff := cmp.Diff(tt.args.report, &fetchedReport, cmpopts.IgnoreFields(model.Report{}, "ID", "CreatedAt")); diff != "" {
+					t.Errorf("fetched report mismatch (-want +got):\n%s", diff)
+				}
+			}
+		})
+	}
 }

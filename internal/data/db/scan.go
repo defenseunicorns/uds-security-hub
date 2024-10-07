@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"github.com/defenseunicorns/uds-security-hub/internal/data/model"
 	"github.com/defenseunicorns/uds-security-hub/internal/external"
 )
+
+// errInsertReport is returned when there is an error when inserting a report.
+var errInsertReport = errors.New("error inserting report")
 
 // ScanManager defines the interface for managing scans in the database.
 type ScanManager interface {
@@ -197,7 +201,7 @@ func (manager *GormScanManager) InsertReport(ctx context.Context, report *model.
 
 	err := InsertReport(manager.db, report)
 	if err != nil {
-		return fmt.Errorf("error inserting report: %w", err)
+		return fmt.Errorf("%w: %w", errInsertReport, err)
 	}
 
 	return nil
