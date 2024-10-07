@@ -127,14 +127,14 @@ func convertToCyclonedxFormat(header *tar.Header, r io.Reader, outputDir string)
 
 	cyclonedxBytes, err := format.Encode(*sbom, cyclonedxEncoder)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode cyclonnedx format for %q: %w", header.Name, err)
+		return nil, fmt.Errorf("failed to encode cyclonedx format for %q: %w", header.Name, err)
 	}
 
 	// use a sha256 for the filename in the tar to avoid any security issues with malformed tar
 	sbomSha256 := sha256.Sum256(cyclonedxBytes)
 	cyclonedxSBOMFilename := path.Join(outputDir, fmt.Sprintf("%x", sbomSha256))
 	if err := os.WriteFile(cyclonedxSBOMFilename, cyclonedxBytes, header.FileInfo().Mode().Perm()); err != nil {
-		return nil, fmt.Errorf("failed to write new cyclonnedx file for %q: %w", header.Name, err)
+		return nil, fmt.Errorf("failed to write new cyclonedx file for %q: %w", header.Name, err)
 	}
 
 	return &cyclonedxSBOMScannable{

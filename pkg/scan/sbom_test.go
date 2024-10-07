@@ -94,3 +94,40 @@ func TestConvertToCyclonedxFormat(t *testing.T) {
 	require.Error(t, err, "expected sbom conversion error, got none")
 	require.ErrorContains(t, err, "failed to convert sbom format")
 }
+
+func TestExtractArtifactInformationFromSBOM_NoTags(t *testing.T) {
+	sbomWithoutTags := `
+	{
+		"source": {
+			"metadata": {
+				"tags": []
+			}
+		}
+	}`
+
+	reader := strings.NewReader(sbomWithoutTags)
+	result := extractArtifactInformationFromSBOM(reader)
+
+	if result != "" {
+		t.Errorf("expected empty result for SBOM with no tags, got: %s", result)
+	}
+}
+
+func TestExtractArtifactInformationFromSBOM_WithTags(t *testing.T) {
+	sbomWithTags := `
+	{
+		"source": {
+			"metadata": {
+				"tags": ["example-tag:latest"]
+			}
+		}
+	}`
+
+	reader := strings.NewReader(sbomWithTags)
+	result := extractArtifactInformationFromSBOM(reader)
+
+	expectedTag := "example-tag:latest"
+	if result != expectedTag {
+		t.Errorf("expected %s, got: %s", expectedTag, result)
+	}
+}
