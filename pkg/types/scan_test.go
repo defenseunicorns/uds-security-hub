@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetArtifactName(t *testing.T) {
@@ -31,10 +32,7 @@ func TestGetArtifactName(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			artifactName := tc.scanResult.GetArtifactName()
-
-			if artifactName != tc.expectedValue {
-				t.Errorf("expected %v, got %v", tc.expectedValue, artifactName)
-			}
+			assert.Equal(t, tc.expectedValue, artifactName, "expected artifact name to match")
 		})
 	}
 }
@@ -144,9 +142,8 @@ func TestGetVulnerabilities(t *testing.T) {
 			if len(vulnerabilities) == 0 && len(tc.expectedValue) == 0 {
 				return
 			}
-			if diff := cmp.Diff(tc.expectedValue, vulnerabilities); diff != "" {
-				t.Errorf("Mismatch (-expected +got):\n%s", diff)
-			}
+			diff := cmp.Diff(tc.expectedValue, vulnerabilities)
+			assert.Empty(t, diff)
 		})
 	}
 }

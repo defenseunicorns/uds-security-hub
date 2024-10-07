@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // MockHTTPClient is a mock implementation of HTTPClientInterface for testing purposes.
@@ -36,18 +38,12 @@ func TestRealHTTPClient_Do(t *testing.T) {
 
 	client := NewRealHTTPClient()
 	req, err := http.NewRequest(http.MethodGet, ts.URL, nil) //nolint:noctx
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "failed to create request")
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
+	require.NoError(t, err, "expected no error, but got one")
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode, "expected status code to be OK")
 }
 
 func TestRealHTTPClient_Do_Error(t *testing.T) {
@@ -58,26 +54,18 @@ func TestRealHTTPClient_Do_Error(t *testing.T) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil) //nolint:noctx
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "failed to create request")
 
 	resp, err := client.Do(req)
-	if err == nil {
-		t.Fatalf("Expected error, got none")
-	}
+	require.Error(t, err, "expected error, but got none")
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
 	}
 
 	expectedErrMsg := "failed to do request"
-	if !strings.Contains(err.Error(), expectedErrMsg) {
-		t.Fatalf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
-	}
+	require.ErrorContains(t, err, expectedErrMsg, "expected error message to contain the expected substring")
 
-	if resp != nil {
-		t.Fatalf("Expected no response, got %v", resp)
-	}
+	require.Nil(t, resp, "expected no response, but got one")
 }
 
 func TestMockHTTPClient_Do(t *testing.T) {
@@ -91,17 +79,11 @@ func TestMockHTTPClient_Do(t *testing.T) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil) //nolint:noctx
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "failed to create request")
 
 	resp, err := mockClient.Do(req)
-	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
-	}
+	require.NoError(t, err, "expected no error, but got one")
+	require.Equal(t, http.StatusOK, resp.StatusCode, "expected status code to be OK")
 	defer resp.Body.Close()
 }
 
@@ -112,15 +94,10 @@ func TestMockHTTPClient_Do_Error(t *testing.T) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil) //nolint:noctx
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	require.NoError(t, err, "failed to create request")
 
 	resp, err := mockClient.Do(req) //nolint:bodyclose
-	if err == nil {
-		t.Fatalf("Expected error, got none")
-	}
-	if resp != nil {
-		t.Fatalf("Expected no response, got %v", resp)
-	}
+	require.Error(t, err, "expected error, but got none")
+
+	require.Nil(t, resp, "expected no response, but got one")
 }
