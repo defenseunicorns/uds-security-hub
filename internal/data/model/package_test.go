@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -302,5 +303,69 @@ func TestDeletePackagesByNameExceptTags_EmptyName(t *testing.T) {
 	err = DeletePackagesByNameExceptTags(db, "", []string{"0.24.1-unicorn"})
 	if err == nil || err.Error() != "name is required" {
 		t.Errorf("expected error 'name is required', got %v", err)
+	}
+}
+
+func TestDeletePackagesByNameExceptTags_FindPackageError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to connect to test database: %v", err)
+	}
+
+	err = db.AutoMigrate(&Package{}, &Scan{}, &Vulnerability{})
+	if err != nil {
+		t.Fatalf("failed to auto-migrate models: %v", err)
+	}
+
+	pkg := &Package{
+		Name:       "example-package",
+		Repository: "example-repo",
+		Tag:        "0.24.1-unicorn",
+	}
+	db.Create(pkg)
+
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Migrator().DropTable(&Package{}); err != nil {
+			t.Fatalf("failed to drop table: %v", err)
+		}
+		err = DeletePackagesByNameExceptTags(tx, "example-package", []string{"0.24.1-unicorn"})
+		if err == nil || !strings.Contains(err.Error(), "failed to find packages") {
+			t.Fatalf("expected error 'failed to find packages', got: %v", err)
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("transaction failed: %v", err)
+	}
+}
+
+func TestDeletePackagesByNameExceptTags_FindScanError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to connect to test database: %v", err)
+	}
+
+	err = db.AutoMigrate(&Package{}, &Scan{}, &Vulnerability{})
+	if err != nil {
+		t.Fatalf("failed to auto-migrate models: %v", err)
+	}
+
+	pkg := &Package{
+		Name:       "example-package",
+		Repository: "example-repo",
+		Tag:        "0.24.0-unicorn",
+	}
+	if err := db.Create(pkg).Error; err != nil {
+		t.Fatalf("failed to create package: %v", err)
+	}
+
+	if err := db.Migrator().DropTable(&Scan{}); err != nil {
+		t.Fatalf("failed to drop scan table: %v", err)
+	}
+
+	err = DeletePackagesByNameExceptTags(db, "example-package", []string{"0.24.1-unicorn"})
+	if err == nil || !strings.Contains(err.Error(), "failed to find scans") {
+		t.Fatalf("expected error 'failed to find scans' error, got: %v", err)
 	}
 }
