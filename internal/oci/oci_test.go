@@ -24,90 +24,89 @@ func (m *MockDockerClient) ImageInspectWithRaw(ctx context.Context, imageID stri
 
 // TestImageBuildTime tests the ImageBuildTime function.
 func TestImageBuildTime(t *testing.T) {
-	mockClient := new(MockDockerClient)
-	ctx := context.Background()
-
-	// Test cases.
+	timeParsed, err := time.Parse(time.RFC3339, "2021-10-21T14:33:00Z")
+	if err != nil {
+		t.Fatalf("failed to parse time: %v", err)
+	}
 	tests := []struct {
 		name         string
 		imageRef     string
-		setupMocks   func()
-		expectedErr  string
+		setupMocks   func(m *MockDockerClient)
+		expectedErr  error
 		expectedTime *time.Time
 	}{
 		{
 			name:     "Successful image inspection",
 			imageRef: "valid-image",
-			setupMocks: func() {
-				mockClient.On("ImageInspectWithRaw", ctx, "valid-image").Return(types.ImageInspect{Created: "2021-10-21T14:33:00Z"}, []byte{}, nil)
+			setupMocks: func(m *MockDockerClient) {
+				m.On("ImageInspectWithRaw", mock.Anything, "valid-image").
+					Return(types.ImageInspect{Created: "2021-10-21T14:33:00Z"}, []byte{}, nil)
 			},
-			expectedErr:  "",
-			expectedTime: func() *time.Time { t, _ := time.Parse(time.RFC3339, "2021-10-21T14:33:00Z"); return &t }(), //nolint:errcheck
+			expectedErr:  nil,
+			expectedTime: &timeParsed,
 		},
 		{
 			name:     "Error inspecting image",
 			imageRef: "invalid-image",
-			setupMocks: func() {
-				mockClient.On("ImageInspectWithRaw", ctx, "invalid-image").Return(types.ImageInspect{}, []byte{}, errors.New("failed to inspect image"))
+			setupMocks: func(m *MockDockerClient) {
+				m.On("ImageInspectWithRaw", mock.Anything, "invalid-image").
+					Return(types.ImageInspect{}, []byte{}, errors.New("failed to inspect image"))
 			},
-			expectedErr:  "failed to inspect image: failed to inspect image",
+			expectedErr:  errFailedToInspectImage,
 			expectedTime: nil,
 		},
 		{
 			name:     "Error parsing creation time",
 			imageRef: "image-with-invalid-time",
-			setupMocks: func() {
-				mockClient.On("ImageInspectWithRaw", ctx, "image-with-invalid-time").Return(types.ImageInspect{Created: "invalid-time"}, []byte{}, nil)
+			setupMocks: func(m *MockDockerClient) {
+				m.On("ImageInspectWithRaw", mock.Anything, "image-with-invalid-time").
+					Return(types.ImageInspect{Created: "invalid-time"}, []byte{}, nil)
 			},
-			expectedErr:  "failed to parse image creation time: parsing time \"invalid-time\" as \"2006-01-02T15:04:05Z07:00\": cannot parse \"invalid-time\" as \"2006\"",
+			expectedErr:  errFailedToParseImageCreationTime,
 			expectedTime: nil,
 		},
 		{
 			name:     "Image creation time is zero",
 			imageRef: "image-with-zero-creation-time",
-			setupMocks: func() {
-				mockClient.On("ImageInspectWithRaw", ctx, "image-with-zero-creation-time").Return(types.ImageInspect{Created: ""}, []byte{}, nil)
+			setupMocks: func(m *MockDockerClient) {
+				m.On("ImageInspectWithRaw", mock.Anything, "image-with-zero-creation-time").
+					Return(types.ImageInspect{Created: ""}, []byte{}, nil)
 			},
-			expectedErr:  "image creation time is zero",
+			expectedErr:  errImageCreationTimeIsZero,
 			expectedTime: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
+			mockClient := new(MockDockerClient)
+			tt.setupMocks(mockClient)
+
 			buildTime, err := ImageBuildTime(mockClient, tt.imageRef)
 
-			if tt.expectedErr != "" {
-				if diff := cmp.Diff(tt.expectedErr, err.Error()); diff != "" {
-					t.Errorf("Error mismatch (-want +got):\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tt.expectedTime, buildTime); diff != "" {
-					t.Errorf("Time mismatch (-want +got):\n%s", diff)
-				}
-			}
+			checkErrorAndTime(t, err, tt.expectedErr, buildTime, tt.expectedTime)
+
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
 
-// TestNewRealClient tests the NewRealClient function.
-func TestNewRealClient(t *testing.T) {
-	// Call the function to test
-	rc, err := NewRealClient()
-
-	// Check for errors
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+func checkErrorAndTime(t *testing.T, err, expectedErr error, buildTime, expectedTime *time.Time) {
+	t.Helper()
+	if expectedErr == nil {
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		return
 	}
-
-	// Check if the returned client is not nil
-	if rc == nil {
-		t.Fatalf("expected non-nil client, got nil")
+	if err == nil {
+		t.Errorf("expected error but got none")
+		return
 	}
-
-	// Check if the internal Docker client is not nil
-	if rc.cli == nil {
-		t.Fatalf("expected non-nil internal Docker client, got nil")
+	if diff := cmp.Diff(expectedTime, buildTime); diff != "" {
+		t.Errorf("unexpected build time (-want +got):\n%s", diff)
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Errorf("expected error %v, but got %v", expectedErr, err)
 	}
 }

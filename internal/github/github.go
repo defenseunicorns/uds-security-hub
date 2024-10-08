@@ -3,15 +3,32 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
-	"golang.org/x/oauth2"
-
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
+
+// errUnexpectedStatusCode is returned when the status code is unexpected.
+var errUnexpectedStatusCode = errors.New("unexpected status code")
+
+// errRequestFailed is returned when there is an error making the HTTP request.
+var errRequestFailed = errors.New("error making request")
+
+// errJSONParsing is returned when there is an error parsing the JSON response.
+var errJSONParsing = errors.New("error parsing JSON response")
+
+// errReadingResponseBody is returned when there is an error reading the response body.
+var errReadingResponseBody = errors.New("error reading response body")
+
+// errNoToken is returned when the GitHub token is not provided.
+var errNoToken = errors.New("GitHub token is not provided")
+
+// errCreatingRequest is returned when there is an error creating the HTTP request.
+var errCreatingRequest = errors.New("error creating request")
 
 // PackageVersion is a struct that represents the package version.
 type PackageVersion struct {
@@ -36,49 +53,52 @@ type VersionTagDate struct {
 	Tags []string  `json:"tags"`
 }
 
-// GetPackageVersions fetches package versions from GitHub and returns the tags and
-// creation dates for versions with non-empty tags.
-// GetPackageVersions is refactored to accept an HTTPClientInterface.
-// This allows for injecting a mock HTTP client during testing.
+// GetPackageVersions retrieves the versions of a specified package from GitHub.
+//
+// Parameters:
+// - ctx: The context for the request.
+// - client: The HTTP client to use for the request.
+// - token: GitHub authentication token.
+// - org: GitHub organization name.
+// - packageType: Type of the package.
+// - packageName: Name of the package.
+//
+// Returns:
+// - A slice of VersionTagDate containing version and tag information.
+// - An error if the operation fails.
 func GetPackageVersions(ctx context.Context, client types.HTTPClientInterface, token, org, packageType,
 	packageName string) ([]VersionTagDate, error) {
 	if token == "" {
-		return nil, fmt.Errorf("GitHub token is not provided")
-	}
-
-	if client == nil {
-		// Fallback to a default HTTP client if none is provided.
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-		client = oauth2.NewClient(ctx, ts)
+		return nil, errNoToken
 	}
 
 	url := fmt.Sprintf("https://api.github.com/orgs/%s/packages/%s/%s/versions", org, packageType, packageName)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("%w: %w", errCreatingRequest, err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error making request: %w", err)
+		return nil, fmt.Errorf("%w: %w", errRequestFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w %d: %s", errUnexpectedStatusCode, resp.StatusCode, resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
+		return nil, fmt.Errorf("%w: %w", errReadingResponseBody, err)
 	}
 
 	var versions []PackageVersion
 	if err := json.Unmarshal(body, &versions); err != nil {
-		return nil, fmt.Errorf("error parsing JSON response: %w", err)
+		return nil, fmt.Errorf("%w: %w", errJSONParsing, err)
 	}
 
 	var tagDates []VersionTagDate
