@@ -7,37 +7,53 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
 
 func TestNewScanResultReader(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name         string
-		want         types.ScanResultReader
-		jsonFilePath string
-		wantErr      bool
+		name               string
+		jsonFilePath       string
+		err                error
+		artifactName       string
+		vulnerabilityCount int
 	}{
 		{
-			name:         "Test with valid scan result",
-			jsonFilePath: "testdata/scanresult.json",
-			wantErr:      false,
+			name:               "Test with valid scan result",
+			jsonFilePath:       "testdata/scanresult.json",
+			err:                nil,
+			artifactName:       "ghcr.io/defenseunicorns/leapfrogai/rag:0.3.1",
+			vulnerabilityCount: 44,
+		},
+		{
+			name:         "Test with invalid scan result",
+			jsonFilePath: "testdata/invalid.json",
+			err:          ErrDecodingJSON,
+		},
+		{
+			name:         "Test with invalid file",
+			jsonFilePath: "testdata/nonexistent.json",
+			err:          ErrOpeningFile,
 		},
 	}
+
 	s := NewRemotePackageScanner(context.Background(), nil, "test", "test", "test", "test", nil, RootFSScannerType)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := s.ScanResultReader(types.PackageScannerResult{JSONFilePath: tt.jsonFilePath})
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewScanResultReader() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.err != nil {
+				require.Error(t, err, "Expected an error but got none")
+				require.ErrorIs(t, err, tt.err, "Expected error %v, but got %v", tt.err, err)
 				return
 			}
-			if got.GetArtifactName() != "ghcr.io/defenseunicorns/leapfrogai/rag:0.3.1" {
-				t.Errorf("NewScanResultReader() got = %v, want %v", got.GetArtifactName(), "ghcr.io/defenseunicorns/leapfrogai/rag:0.3.0")
-			}
-			if len(got.GetVulnerabilities()) != 44 {
-				t.Errorf("NewScanResultReader() got = %v, want %v", len(got.GetVulnerabilities()), 44)
-			}
+			require.NoError(t, err, "Did not expect an error but got one")
+			assert.Equal(t, tt.artifactName, got.GetArtifactName(), "Artifact names do not match")
+			assert.Len(t, got.GetVulnerabilities(), tt.vulnerabilityCount, "Number of vulnerabilities does not match")
 		})
 	}
 }
