@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -196,6 +198,187 @@ func TestExtractFilesFromTar(t *testing.T) {
 			checkError(t, err, tt.expectErr)
 			diff := cmp.Diff(tt.wantResult, results)
 			require.Empty(t, diff)
+		})
+	}
+}
+
+func TestScanResultReader(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	validJSONPath := "testdata/valid_scan_result.json"
+	invalidJSONPath := "testdata/invalid_scan_result.json"
+	nonExistentJSONPath := "testdata/non_existent.json"
+
+	// Write a valid JSON file
+	validScanResult := types.ScanResult{
+		ArtifactName: "artifact",
+		Results: []struct {
+			Vulnerabilities []types.VulnerabilityInfo `json:"Vulnerabilities"`
+		}{
+			{
+				Vulnerabilities: []types.VulnerabilityInfo{
+					{VulnerabilityID: "CVE-1234-5678", Severity: "HIGH"},
+				},
+			},
+		},
+	}
+
+	validFile, err := os.Create(validJSONPath)
+	require.NoError(t, err, "failed to create test file")
+	require.NoError(t, json.NewEncoder(validFile).Encode(validScanResult), "failed to write valid JSON")
+	validFile.Close()
+
+	// Write an invalid JSON file
+	invalidFile, err := os.Create(invalidJSONPath)
+	require.NoError(t, err, "failed to create invalid JSON test file")
+	_, err = invalidFile.WriteString("{invalid json}")
+	require.NoError(t, err, "failed to write invalid JSON")
+	invalidFile.Close()
+
+	defer os.Remove(validJSONPath)
+	defer os.Remove(invalidJSONPath)
+
+	tests := []struct {
+		name           string
+		result         types.PackageScannerResult
+		expectError    bool
+		expectedErrMsg string
+	}{
+		{
+			name: "valid JSON file",
+			result: types.PackageScannerResult{
+				JSONFilePath: validJSONPath,
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid JSON file",
+			result: types.PackageScannerResult{
+				JSONFilePath: invalidJSONPath,
+			},
+			expectError:    true,
+			expectedErrMsg: "failed to decode JSON file",
+		},
+		{
+			name: "non-existent file",
+			result: types.PackageScannerResult{
+				JSONFilePath: nonExistentJSONPath,
+			},
+			expectError:    true,
+			expectedErrMsg: "failed to open JSON file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lps := &LocalPackageScanner{
+				logger: logger,
+			}
+
+			_, err := lps.ScanResultReader(tt.result)
+			if tt.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedErrMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestLocalPackageScanner_Scan_TmpDirError(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	packagePath := "/path/to/package"
+	ctx := context.Background()
+
+	lps := &LocalPackageScanner{
+		logger:      logger,
+		packagePath: packagePath,
+		scannerType: SBOMScannerType,
+	}
+
+	// Set TMPDIR to a directory that doesn't exist to force os.MkdirTemp to fail
+	t.Setenv("TMPDIR", "/non/existent/directory")
+
+	_, err := lps.Scan(ctx)
+	require.Error(t, err, "expected an error from os.MkdirTemp due to invalid directory")
+	require.Contains(t, err.Error(), "failed to create tmp dir", "unexpected error message")
+}
+
+func TestLocalPackageScanner_Scan_SwitchCases(t *testing.T) {
+	packagePath := "/path/to/package"
+	ctx := context.Background()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	tests := []struct {
+		name            string
+		scannerType     ScannerType
+		mockExtractFunc func(tmpDir, packagePath string) ([]trivyScannable, error)
+		expectError     bool
+		errorMessage    string
+	}{
+		{
+			name:        "SBOM extraction success",
+			scannerType: SBOMScannerType,
+			mockExtractFunc: func(tmpDir, packagePath string) ([]trivyScannable, error) {
+				return []trivyScannable{}, nil
+			},
+			expectError: false,
+		},
+		{
+			name:        "SBOM extraction failure",
+			scannerType: SBOMScannerType,
+			mockExtractFunc: func(tmpDir, packagePath string) ([]trivyScannable, error) {
+				return nil, fmt.Errorf("failed to extract sboms")
+			},
+			expectError:  true,
+			errorMessage: "failed to extract sboms from tar",
+		},
+		{
+			name:        "RootFS extraction success",
+			scannerType: RootFSScannerType,
+			mockExtractFunc: func(tmpDir, packagePath string) ([]trivyScannable, error) {
+				return []trivyScannable{}, nil
+			},
+			expectError: false,
+		},
+		{
+			name:        "RootFS extraction failure",
+			scannerType: RootFSScannerType,
+			mockExtractFunc: func(tmpDir, packagePath string) ([]trivyScannable, error) {
+				return nil, fmt.Errorf("failed to extract rootfs")
+			},
+			expectError:  true,
+			errorMessage: "failed to extract rootfs from tar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.scannerType == SBOMScannerType {
+				extractSBOMs = tt.mockExtractFunc
+			} else if tt.scannerType == RootFSScannerType {
+				extractRootFS = tt.mockExtractFunc
+			}
+
+			defer func() {
+				extractSBOMs = ExtractSBOMsFromZarfTarFile
+				extractRootFS = ExtractRootFsFromTarFilePath
+			}()
+
+			lps := &LocalPackageScanner{
+				logger:      logger,
+				packagePath: packagePath,
+				scannerType: tt.scannerType,
+			}
+
+			_, err := lps.Scan(ctx)
+
+			if tt.expectError {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errorMessage)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }

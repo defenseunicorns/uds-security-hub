@@ -14,6 +14,9 @@ import (
 	"github.com/defenseunicorns/uds-security-hub/pkg/types"
 )
 
+var extractSBOMs = ExtractSBOMsFromZarfTarFile
+var extractRootFS = ExtractRootFsFromTarFilePath
+
 func extractFilesFromTar(r io.Reader, filenames ...string) (map[string][]byte, error) {
 	tarReader := tar.NewReader(r)
 
@@ -95,14 +98,12 @@ func (lps *LocalPackageScanner) Scan(ctx context.Context) (*types.PackageScan, e
 	var scannables []trivyScannable
 	switch lps.scannerType {
 	case SBOMScannerType:
-		var err error
-		scannables, err = ExtractSBOMsFromZarfTarFile(tmpDir, lps.packagePath)
+		scannables, err = extractSBOMs(tmpDir, lps.packagePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract sboms from tar: %w", err)
 		}
 	case RootFSScannerType:
-		var err error
-		scannables, err = ExtractRootFsFromTarFilePath(tmpDir, lps.packagePath)
+		scannables, err = extractRootFS(tmpDir, lps.packagePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract rootfs from tar: %w", err)
 		}
