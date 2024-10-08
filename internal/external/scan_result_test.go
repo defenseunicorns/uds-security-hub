@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/defenseunicorns/uds-security-hub/internal/data/model"
 )
@@ -16,51 +18,27 @@ import (
 func TestScanResultDeserialization(t *testing.T) {
 	// Load the JSON data from the file
 	data, err := os.ReadFile("testdata/scanresult.json")
-	if err != nil {
-		t.Fatalf("Failed to read JSON file: %s", err)
-	}
+	require.NoError(t, err, "Failed to read JSON file")
 
 	// Deserialize the JSON data into the ScanResult struct
 	var result ScanResult
 	err = json.Unmarshal(data, &result) //nolint:musttag
-	if err != nil {
-		t.Fatalf("Failed to deserialize JSON data: %s", err)
-	}
+	require.NoError(t, err, "Failed to deserialize JSON data")
 
 	// Perform checks to ensure the data is deserialized correctly
-	if result.SchemaVersion == 0 {
-		t.Errorf("Expected SchemaVersion to be set")
-	}
-	if result.CreatedAt.IsZero() {
-		t.Errorf("Expected CreatedAt to be a valid time")
-	}
-	if result.ArtifactName == "" {
-		t.Errorf("Expected ArtifactName to be non-empty")
-	}
-	if len(result.Results) == 0 {
-		t.Errorf("Expected Results to contain elements")
-	}
+	assert.NotZero(t, result.SchemaVersion, "Expected SchemaVersion to be set")
+	assert.False(t, result.CreatedAt.IsZero(), "Expected CreatedAt to be a valid time")
+	assert.NotEmpty(t, result.ArtifactName, "Expected ArtifactName to be non-empty")
+	assert.NotEmpty(t, result.Results, "Expected Results to contain elements")
 
 	// Check a few fields deeply
-	if len(result.Results[0].Vulnerabilities) == 0 {
-		t.Errorf("Expected Vulnerabilities to contain elements")
-	}
+	require.NotEmpty(t, result.Results[0].Vulnerabilities, "Expected Vulnerabilities to contain elements")
 	vuln := result.Results[0].Vulnerabilities[0]
-	if vuln.VulnerabilityID == "" {
-		t.Errorf("Expected VulnerabilityID to be non-empty")
-	}
-	if vuln.PkgName == "" {
-		t.Errorf("Expected PkgName to be non-empty")
-	}
-	if vuln.Severity == "" {
-		t.Errorf("Expected Severity to be non-empty")
-	}
-	if vuln.PublishedDate.IsZero() {
-		t.Errorf("Expected PublishedDate to be a valid time")
-	}
-	if vuln.LastModifiedDate.IsZero() {
-		t.Errorf("Expected LastModifiedDate to be a valid time")
-	}
+	assert.NotEmpty(t, vuln.VulnerabilityID, "Expected VulnerabilityID to be non-empty")
+	assert.NotEmpty(t, vuln.PkgName, "Expected PkgName to be non-empty")
+	assert.NotEmpty(t, vuln.Severity, "Expected Severity to be non-empty")
+	assert.False(t, vuln.PublishedDate.IsZero(), "Expected PublishedDate to be a valid time")
+	assert.False(t, vuln.LastModifiedDate.IsZero(), "Expected LastModifiedDate to be a valid time")
 }
 
 func TestMapScanResultToDTO(t *testing.T) {
@@ -76,9 +54,7 @@ func TestMapScanResultToDTO(t *testing.T) {
 	}
 
 	metadataJSON, err := json.Marshal(metadata)
-	if err != nil {
-		t.Fatalf("Failed to marshal metadata: %s", err)
-	}
+	require.NoError(t, err, "Failed to marshal metadata")
 
 	createdAt := time.Now()
 
@@ -163,7 +139,7 @@ func TestMapScanResultToDTO(t *testing.T) {
 
 	// Compare the expected and actual DTOs
 	if diff := cmp.Diff(expectedDTO, actualDTOs); diff != "" {
-		t.Errorf("MapScanResultToDTO() mismatch (-want +got):\n%s", diff)
+		assert.Failf(t, "MapScanResultToDTO() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -291,7 +267,7 @@ func TestMapPackageDTOToReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			report := MapPackageDTOToReport(tt.dto, tt.sbom)
 			if diff := cmp.Diff(tt.expected, report, cmpopts.IgnoreFields(model.Report{}, "CreatedAt")); diff != "" {
-				t.Errorf("MapPackageDTOToReport() mismatch (-expected +got):\n%s", diff)
+				assert.Failf(t, "MapPackageDTOToReport() mismatch (-expected +got):\n%s", diff)
 			}
 		})
 	}
@@ -336,7 +312,7 @@ func TestCountVulnerabilities(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			count := countVulnerabilities(tt.scans, tt.severity)
 			if diff := cmp.Diff(tt.expected, count); diff != "" {
-				t.Errorf("countVulnerabilities() mismatch (-expected +got):\n%s", diff)
+				assert.Failf(t, "countVulnerabilities() mismatch (-expected +got):\n%s", diff)
 			}
 		})
 	}
