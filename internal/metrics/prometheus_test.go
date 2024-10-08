@@ -165,7 +165,7 @@ func TestMeasureFunctionExecutionTime(t *testing.T) {
 	stopFunc()
 
 	// Validate the histogram
-	histogramVec, ok := collector.(*prometheusCollector).histograms["uds_security_hub_function_duration_seconds"]
+	histogramVec, ok := collector.histograms["uds_security_hub_function_duration_seconds"]
 	if !ok {
 		t.Fatal("histogram 'uds_security_hub_function_duration_seconds' not found")
 	}

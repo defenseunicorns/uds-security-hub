@@ -74,7 +74,7 @@ func (p *prometheusCollector) MetricsHandler() http.Handler {
 // NewPrometheus creates a new prometheusCollector with empty sync.Maps for histograms, gauges, and counters.
 
 // NewPrometheus creates a new prometheusCollector with empty sync.Maps for histograms, gauges, and counters.
-func NewPrometheus(name string) MetricCollector {
+func NewPrometheus(name string) *prometheusCollector {
 	prefix := fmt.Sprintf("%s_%s_function_duration_seconds", "uds_security_hub", name)
 	functionDuration := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -245,9 +245,9 @@ func (p *prometheusCollector) UnregisterGauge(_ context.Context, name string, _ 
 }
 
 // FromContext returns the MetricCollector from the context.
-func FromContext(ctx context.Context, name string) MetricCollector {
+func FromContext(ctx context.Context, name string) *prometheusCollector {
 	c := metrics(collectorKey)
-	if met, ok := ctx.Value(c).(MetricCollector); ok {
+	if met, ok := ctx.Value(c).(*prometheusCollector); ok {
 		return met
 	}
 	return NewPrometheus(name)

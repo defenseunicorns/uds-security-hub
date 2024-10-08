@@ -28,7 +28,7 @@ func (m *MockHTTPClient) Do(_ *http.Request) (*http.Response, error) {
 }
 
 // NewMockHTTPClient creates a new instance of the MockHTTPClient.
-func NewMockHTTPClient(mockStatus int, mockResp string) types.HTTPClientInterface {
+func NewMockHTTPClient(mockStatus int, mockResp string) *MockHTTPClient {
 	return &MockHTTPClient{
 		mockResp:   mockResp,
 		mockStatus: mockStatus,
